@@ -17,3 +17,5 @@ readdisk
 sim
 writebuffer
 writedisk
+TEST*
+__test*
