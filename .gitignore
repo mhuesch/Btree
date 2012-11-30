@@ -19,3 +19,5 @@ writebuffer
 writedisk
 TEST*
 __test*
+
+mydisk*
