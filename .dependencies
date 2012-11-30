@@ -1,0 +1,33 @@
+block.o: block.cc block.h global.h
+disksystem.o: disksystem.cc disksystem.h global.h block.h
+buffercache.o: buffercache.cc buffercache.h global.h block.h disksystem.h
+btree.o: btree.cc btree.h global.h block.h disksystem.h buffercache.h \
+ btree_ds.h
+btree_ds.o: btree_ds.cc btree_ds.h global.h block.h buffercache.h \
+ disksystem.h btree.h
+makedisk.o: makedisk.cc disksystem.h global.h block.h
+infodisk.o: infodisk.cc disksystem.h global.h block.h
+readdisk.o: readdisk.cc disksystem.h global.h block.h
+writedisk.o: writedisk.cc disksystem.h global.h block.h
+deletedisk.o: deletedisk.cc disksystem.h global.h block.h
+readbuffer.o: readbuffer.cc buffercache.h global.h block.h disksystem.h
+writebuffer.o: writebuffer.cc buffercache.h global.h block.h disksystem.h
+freebuffer.o: freebuffer.cc buffercache.h global.h block.h disksystem.h
+btree_init.o: btree_init.cc btree.h global.h block.h disksystem.h \
+ buffercache.h btree_ds.h
+btree_insert.o: btree_insert.cc btree.h global.h block.h disksystem.h \
+ buffercache.h btree_ds.h
+btree_update.o: btree_update.cc btree.h global.h block.h disksystem.h \
+ buffercache.h btree_ds.h
+btree_delete.o: btree_delete.cc btree.h global.h block.h disksystem.h \
+ buffercache.h btree_ds.h
+btree_lookup.o: btree_lookup.cc btree.h global.h block.h disksystem.h \
+ buffercache.h btree_ds.h
+btree_show.o: btree_show.cc btree.h global.h block.h disksystem.h \
+ buffercache.h btree_ds.h
+btree_sane.o: btree_sane.cc btree.h global.h block.h disksystem.h \
+ buffercache.h btree_ds.h
+btree_display.o: btree_display.cc btree.h global.h block.h disksystem.h \
+ buffercache.h btree_ds.h
+sim.o: sim.cc btree.h global.h block.h disksystem.h buffercache.h \
+ btree_ds.h
