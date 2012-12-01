@@ -240,11 +240,7 @@ ERROR_T BTreeIndex::LookupOrUpdateInternal(const SIZE_T &node,
 	  return b.GetVal(offset,value);
 	} else { 
 	  // BTREE_OP_UPDATE
-	  // WRITE ME
-	  rc=b.GetPtr(offset,ptr);
-	  if (rc) { return rc; }
-	  memcpy(&ptr,&value,sizeof(value));
-	  return ERROR_NOERROR; 
+	  return b.SetVal(offset,value);
 	}
       }
     }
