@@ -240,7 +240,9 @@ ERROR_T BTreeIndex::LookupOrUpdateInternal(const SIZE_T &node,
 	  return b.GetVal(offset,value);
 	} else { 
 	  // BTREE_OP_UPDATE
-	  return b.SetVal(offset,value);
+	  rc =  b.SetVal(offset,value);
+	  if (rc) { return rc; }
+	  return b.Serialize(buffercache,node);
 	}
       }
     }
@@ -339,7 +341,7 @@ static ERROR_T PrintNode(ostream &os, SIZE_T nodenum, BTreeNode &b, BTreeDisplay
     if (dt==BTREE_DEPTH_DOT) { 
       os << "Unknown("<<b.info.nodetype<<")";
     } else {
-      os << "Unsupported Node Type " << b.info.nodetype ;
+      os << "PrintNode: Unsupported Node Type " << b.info.nodetype ;
     }
   }
   if (dt==BTREE_DEPTH_DOT) { 
@@ -353,12 +355,120 @@ ERROR_T BTreeIndex::Lookup(const KEY_T &key, VALUE_T &value)
   return LookupOrUpdateInternal(superblock.info.rootnode, BTREE_OP_LOOKUP, key, value);
 }
 
-ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
+ERROR_T BTreeIndex::Inserter(const SIZE_T &node, const KEY_T &key, const VALUE_T &value)
 {
-  // WRITE ME
-  return ERROR_UNIMPL;
+  BTreeNode b;
+  ERROR_T rc;
+  SIZE_T offset;
+  KEY_T testkey;
+  SIZE_T ptr;
+
+  rc = b.Unserialize(buffercache,node);
+  if (rc!=ERROR_NOERROR) { return rc; }
+
+  switch (b.info.nodetype) {
+    case BTREE_ROOT_NODE:
+      if (b.info.numkeys==0){
+	SIZE_T left_block_loc;
+	SIZE_T& left_block_ref = left_block_loc;
+	SIZE_T right_block_loc;
+	SIZE_T& right_block_ref = right_block_loc;
+
+
+	// Left node
+	//
+	// Get block offset from AllocateNode
+	rc = AllocateNode(left_block_ref);
+	if (rc!=ERROR_NOERROR) { return rc; }
+
+	// Unserialize from block offset into left_node
+	BTreeNode left_node;
+	left_node.Unserialize(buffercache,left_block_loc);	
+
+	// left_node is a leaf node
+	left_node.info.nodetype = BTREE_LEAF_NODE;
+        left_node.data = new char [left_node.info.GetNumDataBytes()];
+        memset(left_node.data,0,left_node.info.GetNumDataBytes());
+
+	// Set number of keys in left_node to 1
+	left_node.info.numkeys = 1;
+
+	// Set key of left_node
+	rc = left_node.SetKey(0,key);
+	if (rc!=ERROR_NOERROR) { return rc; }
+
+	// Set value in left_node
+	rc = left_node.SetVal(0,value);
+	if (rc!=ERROR_NOERROR) { return rc; }
+
+	// Serialize left_node back into buffer
+	rc = left_node.Serialize(buffercache,left_block_loc);
+	if (rc!=ERROR_NOERROR) { return rc; }
+
+
+	// Right node
+	//
+	// Get block offset from AllocateNode
+	rc = AllocateNode(right_block_ref);
+	if (rc!=ERROR_NOERROR) { return rc; }
+
+	// Unserialize from block offset into right_node
+	BTreeNode right_node;
+	right_node.Unserialize(buffercache,right_block_loc);	
+
+	// right_node is a leaf node
+	right_node.info.nodetype = BTREE_LEAF_NODE;
+        right_node.data = new char [right_node.info.GetNumDataBytes()];
+        memset(right_node.data,0,right_node.info.GetNumDataBytes());
+
+	// Set number of keys in right_node to 0
+	right_node.info.numkeys = 0;
+
+	// Serialize right_node back into buffer
+	rc = right_node.Serialize(buffercache,right_block_loc);
+
+
+	// Root node
+	//
+	// Set number of keys in root to 1
+	b.info.numkeys = 1;
+	
+	// Set key in root
+	rc = b.SetKey(0,key);
+	if (rc!=ERROR_NOERROR) { return rc; }
+
+	// Set left pointer of root to point at left_node
+	rc = b.SetPtr(0,left_block_ref);
+	if (rc!=ERROR_NOERROR) { return rc; }
+
+	// Set right pointer of root to point at right_node
+	rc = b.SetPtr(1,right_block_ref);
+	if (rc!=ERROR_NOERROR) { return rc; }
+
+	// Serialize root node
+	rc = b.Serialize(buffercache,node);
+	if (rc!=ERROR_NOERROR) { return rc; }
+
+	return ERROR_NOERROR;
+	break;
+      } else {
+	return ERROR_UNIMPL;
+	break;	
+      }
+
+     default:
+	return ERROR_UNIMPL;
+	break;
+   }
+
+   return ERROR_INSANE;
 }
   
+ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
+{
+  return Inserter(superblock.info.rootnode, key, value);
+}
+
 ERROR_T BTreeIndex::Update(const KEY_T &key, const VALUE_T &value)
 {
   VALUE_T val = value;
@@ -431,7 +541,7 @@ ERROR_T BTreeIndex::DisplayInternal(const SIZE_T &node,
   default:
     if (display_type==BTREE_DEPTH_DOT) { 
     } else {
-      o << "Unsupported Node Type " << b.info.nodetype ;
+      o << "DisplayInternal: Unsupported Node Type " << b.info.nodetype ;
     }
     return ERROR_INSANE;
   }

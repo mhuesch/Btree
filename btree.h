@@ -99,6 +99,9 @@ public:
   // We expect you to tell us the number of your superblock, which
   // we will return to you on the next attach
   ERROR_T Detach(SIZE_T &initblock);
+ 
+  // Our Inserter, called by Insert
+  ERROR_T Inserter(const SIZE_T &node, const KEY_T &key, const VALUE_T &value);
   
   // return zero on success
   // return ERROR_NOSPACE if you run out of disk space
@@ -137,6 +140,7 @@ public:
   // sorted in order of keys.
   ERROR_T Display(ostream &o, BTreeDisplayType display_type=BTREE_DEPTH) const;
   
+
   ostream & Print(ostream &os) const;
   
 };

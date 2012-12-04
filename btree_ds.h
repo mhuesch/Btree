@@ -63,7 +63,7 @@ struct BTreeNode {
   char         *data;
   //
   // unallocated or superblock => blank
-  // interior => array of keys
+  // interior => array of keys and pointer
   // leaf => array of key/value pairs
 
 
