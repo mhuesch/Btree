@@ -368,101 +368,205 @@ ERROR_T BTreeIndex::Inserter(const SIZE_T &node, const KEY_T &key, const VALUE_T
 
   switch (b.info.nodetype) {
     case BTREE_ROOT_NODE:
-      if (b.info.numkeys==0){
-	SIZE_T left_block_loc;
-	SIZE_T& left_block_ref = left_block_loc;
-	SIZE_T right_block_loc;
-	SIZE_T& right_block_ref = right_block_loc;
+      if (b.info.numkeys==0) {
+        SIZE_T left_block_loc;
+        SIZE_T& left_block_ref = left_block_loc;
+        SIZE_T right_block_loc;
+        SIZE_T& right_block_ref = right_block_loc;
 
 
-	// Left node
-	//
-	// Get block offset from AllocateNode
-	rc = AllocateNode(left_block_ref);
-	if (rc!=ERROR_NOERROR) { return rc; }
+        // Left node
+        //
+        // Get block offset from AllocateNode
+        rc = AllocateNode(left_block_ref);
+        if (rc) { return rc; }
 
-	// Unserialize from block offset into left_node
-	BTreeNode left_node;
-	left_node.Unserialize(buffercache,left_block_loc);	
+        // Unserialize from block offset into left_node
+        BTreeNode left_node;
+        rc = left_node.Unserialize(buffercache,left_block_loc);	
+        if (rc) { return rc; }
 
-	// left_node is a leaf node
-	left_node.info.nodetype = BTREE_LEAF_NODE;
+        // left_node is a leaf node
+        left_node.info.nodetype = BTREE_LEAF_NODE;
         left_node.data = new char [left_node.info.GetNumDataBytes()];
         memset(left_node.data,0,left_node.info.GetNumDataBytes());
 
-	// Set number of keys in left_node to 1
-	left_node.info.numkeys = 1;
+        // Set number of keys in left_node to 1
+        left_node.info.numkeys = 1;
 
-	// Set key of left_node
-	rc = left_node.SetKey(0,key);
-	if (rc!=ERROR_NOERROR) { return rc; }
+        // Set key of left_node
+        rc = left_node.SetKey(0,key);
+        if (rc) { return rc; }
 
-	// Set value in left_node
-	rc = left_node.SetVal(0,value);
-	if (rc!=ERROR_NOERROR) { return rc; }
+        // Set value in left_node
+        rc = left_node.SetVal(0,value);
+        if (rc) { return rc; }
 
-	// Serialize left_node back into buffer
-	rc = left_node.Serialize(buffercache,left_block_loc);
-	if (rc!=ERROR_NOERROR) { return rc; }
+        // Serialize left_node back into buffer
+        rc = left_node.Serialize(buffercache,left_block_loc);
+        if (rc) { return rc; }
 
 
-	// Right node
-	//
-	// Get block offset from AllocateNode
-	rc = AllocateNode(right_block_ref);
-	if (rc!=ERROR_NOERROR) { return rc; }
+        // Right node
+        //
+        // Get block offset from AllocateNode
+        rc = AllocateNode(right_block_ref);
+        if (rc) { return rc; }
 
-	// Unserialize from block offset into right_node
-	BTreeNode right_node;
-	right_node.Unserialize(buffercache,right_block_loc);	
+        // Unserialize from block offset into right_node
+        BTreeNode right_node;
+        rc = right_node.Unserialize(buffercache,right_block_loc);	
+        if (rc) { return rc; }
 
-	// right_node is a leaf node
-	right_node.info.nodetype = BTREE_LEAF_NODE;
+        // right_node is a leaf node
+        right_node.info.nodetype = BTREE_LEAF_NODE;
         right_node.data = new char [right_node.info.GetNumDataBytes()];
         memset(right_node.data,0,right_node.info.GetNumDataBytes());
 
-	// Set number of keys in right_node to 0
-	right_node.info.numkeys = 0;
+        // Set number of keys in right_node to 0
+        right_node.info.numkeys = 0;
 
-	// Serialize right_node back into buffer
-	rc = right_node.Serialize(buffercache,right_block_loc);
+        // Serialize right_node back into buffer
+        rc = right_node.Serialize(buffercache,right_block_loc);
+        if (rc) { return rc; }
 
 
-	// Root node
-	//
-	// Set number of keys in root to 1
-	b.info.numkeys = 1;
-	
-	// Set key in root
-	rc = b.SetKey(0,key);
-	if (rc!=ERROR_NOERROR) { return rc; }
+        // Root node
+        //
+        // Set number of keys in root to 1
+        b.info.numkeys = 1;
 
-	// Set left pointer of root to point at left_node
-	rc = b.SetPtr(0,left_block_ref);
-	if (rc!=ERROR_NOERROR) { return rc; }
+        // Set key in root
+        rc = b.SetKey(0,key);
+        if (rc) { return rc; }
 
-	// Set right pointer of root to point at right_node
-	rc = b.SetPtr(1,right_block_ref);
-	if (rc!=ERROR_NOERROR) { return rc; }
+        // Set left pointer of root to point at left_node
+        rc = b.SetPtr(0,left_block_ref);
+        if (rc) { return rc; }
 
-	// Serialize root node
-	rc = b.Serialize(buffercache,node);
-	if (rc!=ERROR_NOERROR) { return rc; }
+        // Set right pointer of root to point at right_node
+        rc = b.SetPtr(1,right_block_ref);
+        if (rc) { return rc; }
 
-	return ERROR_NOERROR;
-	break;
+        // Serialize root node
+        rc = b.Serialize(buffercache,node);
+        if (rc) { return rc; }
+
+        return ERROR_NOERROR;
+        break;
+      } 
+
+    case BTREE_INTERIOR_NODE:
+      // Scan through key/ptr pairs
+      //and recurse if possible
+      for (offset=0;offset<b.info.numkeys;offset++) { 
+        rc=b.GetKey(offset,testkey);
+        if (rc) {  return rc; }
+        if (key<testkey || key==testkey) {
+          // OK, so we now have the first key that's larger
+          // so we ned to recurse on the ptr immediately previous to 
+          // this one, if it exists
+          rc=b.GetPtr(offset,ptr);
+          if (rc) { return rc; }
+          return Inserter(ptr,key,value);
+        }
+      }
+      // if we got here, we need to go to the next pointer, if it exists
+      if (b.info.numkeys>0) { 
+        rc=b.GetPtr(b.info.numkeys,ptr);
+        if (rc) { return rc; }
+        return Inserter(ptr,key,value);
       } else {
-	return ERROR_UNIMPL;
-	break;	
+        // There are no keys at all on this node, so nowhere to go
+        return ERROR_NONEXISTENT;
+      }
+      break;
+
+    case BTREE_LEAF_NODE:
+
+      if (b.info.numkeys==0) {
+        // Special case where leaf node is empty. Insert at beginning.
+        
+        //Increment numkeys
+        b.info.numkeys++;
+
+        rc = b.SetKey(0,key);
+        if (rc) { return rc; }
+
+        rc = b.SetVal(0,value);
+        if (rc) { return rc; }
+
+        rc = b.Serialize(buffercache,node);
+        if (rc) { return rc; }
+
+        return ERROR_NOERROR;
+        break;
       }
 
-     default:
-	return ERROR_UNIMPL;
-	break;
+      //
+      // Node has keys and values in it
+
+      for (offset=0;offset<b.info.numkeys;offset++) {
+        // move through keys until we find one larger than input key
+        rc=b.GetKey(offset,testkey);
+        if (rc) {  return rc; }
+        // If key exists, can't insert. Return conflict error.
+        if (key == testkey) { return ERROR_CONFLICT; }
+        // Otherwise, break loop and continue
+        if (key<testkey) { break; }
+      }
+
+      // Increment numkeys
+      b.info.numkeys++;
+
+      SIZE_T i;
+      for(i=(b.info.numkeys-2);i>=offset;--i) {
+        // Move back from largest key to offset key, shifting keys and values one to
+        // the right
+        
+        // Shift key
+        KEY_T temp_key;
+        KEY_T& temp_key_ref = temp_key;
+        rc=b.GetKey(i,temp_key_ref);
+        if (rc) { return rc; }
+        rc=b.SetKey(i+1,temp_key_ref);
+        if (rc) { return rc; }
+        
+        // Shift value
+        VALUE_T temp_val;
+        VALUE_T& temp_val_ref = temp_val;
+        rc=b.GetVal(i,temp_val_ref);
+        if (rc) { return rc; }
+        rc=b.SetVal(i+1,temp_val_ref);
+        if (rc) { return rc; }
+
+        // Rediculous hack because loop conditional doesn't work
+        if (i == offset) { break; }
+      }
+      
+      // Set input key
+      b.SetKey(offset,key);
+      if (rc) { return rc; }
+      
+      // Set input value
+      b.SetVal(offset,value);
+      if (rc) { return rc; }
+
+      // Serialize block
+      b.Serialize(buffercache,node);
+      if (rc) { return rc; }
+      
+      return ERROR_NOERROR;
+      break;
+
+    default:
+      return ERROR_UNIMPL;
+      break;
    }
 
    return ERROR_INSANE;
 }
+
   
 ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
 {
