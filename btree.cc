@@ -595,13 +595,14 @@ ERROR_T BTreeIndex::LeafNodeInsert(const SIZE_T &node, BTreeNode &b, const KEY_T
 
 ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
 {
-  SIZE_T& orig_block_ref;
+  SIZE_T orig_block_loc;
   ERROR_T rc;
 
   // First node offset on list is current node. Pop it for when we recurse.
   if (crumbs.empty()) { return ERROR_INSANE; }
-  orig_block_ref = list.front();
-  list.pop_front();
+  orig_block_loc = crumbs.front();
+  SIZE_T& orig_block_ref = orig_block_loc;
+  crumbs.pop_front();
 
   // Unserialize node
   BTreeNode orig_node;
@@ -638,7 +639,7 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
       new_node.info.nodetype=BTREE_LEAF_NODE;
       new_node.info.numkeys=k2;
       // Initialize new_node's data to all 0's
-      new_node.data = new char [left_node.info.GetNumDataBytes()];
+      new_node.data = new char [new_node.info.GetNumDataBytes()];
       memset(new_node.data,0,new_node.info.GetNumDataBytes());
 
       // Iterator and temporary keys and values, used to copy data
@@ -652,7 +653,7 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
         // Loop through orig_node.data, copying into new_node.data
         
         // Copy key
-        rc = orig_node.GetKey(i,temp_key_ref;
+        rc = orig_node.GetKey(i,temp_key_ref);
         if (rc) { return rc; }
         rc = new_node.SetKey(i-k1,temp_key_ref);
         if (rc) { return rc; }
