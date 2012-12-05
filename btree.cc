@@ -281,20 +281,20 @@ static ERROR_T PrintNode(ostream &os, SIZE_T nodenum, BTreeNode &b, BTreeDisplay
     } else {
       if (dt==BTREE_DEPTH_DOT) { 
       } else { 
-	os << "Interior: ";
+        os << "Interior: ";
       }
       for (offset=0;offset<=b.info.numkeys;offset++) { 
-	rc=b.GetPtr(offset,ptr);
-	if (rc) { return rc; }
-	os << "*" << ptr << " ";
-	// Last pointer
-	if (offset==b.info.numkeys) break;
-	rc=b.GetKey(offset,key);
-	if (rc) {  return rc; }
-	for (i=0;i<b.info.keysize;i++) { 
-	  os << key.data[i];
-	}
-	os << " ";
+        rc=b.GetPtr(offset,ptr);
+        if (rc) { return rc; }
+        os << "*" << ptr << " ";
+        // Last pointer
+        if (offset==b.info.numkeys) break;
+        rc=b.GetKey(offset,key);
+        if (rc) {  return rc; }
+        for (i=0;i<b.info.keysize;i++) { 
+          os << key.data[i];
+        }
+        os << " ";
       }
     }
     break;
@@ -355,7 +355,7 @@ ERROR_T BTreeIndex::Lookup(const KEY_T &key, VALUE_T &value)
   return LookupOrUpdateInternal(superblock.info.rootnode, BTREE_OP_LOOKUP, key, value);
 }
 
-ERROR_T BTreeIndex::Inserter(const SIZE_T &node, const KEY_T &key, const VALUE_T &value)
+ERROR_T BTreeIndex::Inserter(list<SIZE_T> crumbs, const SIZE_T &node, const KEY_T &key, const VALUE_T &value)
 {
   BTreeNode b;
   BTreeNode& b_ref = b;
@@ -363,6 +363,9 @@ ERROR_T BTreeIndex::Inserter(const SIZE_T &node, const KEY_T &key, const VALUE_T
   SIZE_T offset;
   KEY_T testkey;
   SIZE_T ptr;
+
+  // Push current node 
+  crumbs.push_front(node);
 
   rc = b.Unserialize(buffercache,node);
   if (rc!=ERROR_NOERROR) { return rc; }
@@ -471,14 +474,14 @@ ERROR_T BTreeIndex::Inserter(const SIZE_T &node, const KEY_T &key, const VALUE_T
           // this one, if it exists
           rc=b.GetPtr(offset,ptr);
           if (rc) { return rc; }
-          return Inserter(ptr,key,value);
+          return Inserter(crumbs,ptr,key,value);
         }
       }
       // if we got here, we need to go to the next pointer, if it exists
       if (b.info.numkeys>0) { 
         rc=b.GetPtr(b.info.numkeys,ptr);
         if (rc) { return rc; }
-        return Inserter(ptr,key,value);
+        return Inserter(crumbs,ptr,key,value);
       } else {
         // There are no keys at all on this node, so nowhere to go
         return ERROR_NONEXISTENT;
@@ -530,8 +533,9 @@ ERROR_T BTreeIndex::LeafNodeInsert(const SIZE_T &node, BTreeNode &b, const KEY_T
 
   for (offset=0;offset<b.info.numkeys;offset++) {
     // move through keys until we find one larger than input key
-    rc=b.GetKey(offset,testkey);
+    rc = b.GetKey(offset,testkey);
     if (rc) {  return rc; }
+    //
     // If key exists, can't insert. Return conflict error.
     if (key == testkey) { return ERROR_CONFLICT; }
     // Otherwise, break loop and continue
@@ -541,25 +545,27 @@ ERROR_T BTreeIndex::LeafNodeInsert(const SIZE_T &node, BTreeNode &b, const KEY_T
   // Increment numkeys
   b.info.numkeys++;
 
+  // Iterator and temporary keys and values, used to copy data
   SIZE_T i;
+  KEY_T temp_key;
+  KEY_T& temp_key_ref = temp_key;
+  VALUE_T temp_val;
+  VALUE_T& temp_val_ref = temp_val;
+  //
   for(i=(b.info.numkeys-2);i>=offset;--i) {
     // Move back from largest key to offset key, shifting keys and values one to
     // the right
 
     // Shift key
-    KEY_T temp_key;
-    KEY_T& temp_key_ref = temp_key;
-    rc=b.GetKey(i,temp_key_ref);
+    rc = b.GetKey(i,temp_key_ref);
     if (rc) { return rc; }
-    rc=b.SetKey(i+1,temp_key_ref);
+    rc = b.SetKey(i+1,temp_key_ref);
     if (rc) { return rc; }
 
     // Shift value
-    VALUE_T temp_val;
-    VALUE_T& temp_val_ref = temp_val;
-    rc=b.GetVal(i,temp_val_ref);
+    rc = b.GetVal(i,temp_val_ref);
     if (rc) { return rc; }
-    rc=b.SetVal(i+1,temp_val_ref);
+    rc = b.SetVal(i+1,temp_val_ref);
     if (rc) { return rc; }
 
     // Rediculous hack because loop conditional doesn't work
@@ -567,15 +573,15 @@ ERROR_T BTreeIndex::LeafNodeInsert(const SIZE_T &node, BTreeNode &b, const KEY_T
   }
 
   // Set input key
-  b.SetKey(offset,key);
+  rc = b.SetKey(offset,key);
   if (rc) { return rc; }
 
   // Set input value
-  b.SetVal(offset,value);
+  rc = b.SetVal(offset,value);
   if (rc) { return rc; }
 
   // Serialize block
-  b.Serialize(buffercache,node);
+  rc = b.Serialize(buffercache,node);
   if (rc) { return rc; }
 
   if (b.info.numkeys >= b.info.GetNumSlotsAsLeaf()) {
@@ -586,10 +592,116 @@ ERROR_T BTreeIndex::LeafNodeInsert(const SIZE_T &node, BTreeNode &b, const KEY_T
   // We're under the slot upper bound. All good
   return ERROR_NOERROR;
 }
+
+ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
+{
+  SIZE_T& orig_block_ref;
+  ERROR_T rc;
+
+  // First node offset on list is current node. Pop it for when we recurse.
+  if (crumbs.empty()) { return ERROR_INSANE; }
+  orig_block_ref = list.front();
+  list.pop_front();
+
+  // Unserialize node
+  BTreeNode orig_node;
+  rc = orig_node.Unserialize(buffercache,orig_block_ref);
+  if (rc) { return rc; }
+
+  switch (orig_node.info.nodetype) { 
+    case BTREE_ROOT_NODE:
+      // Falls through into interior node
+    case BTREE_INTERIOR_NODE:
+      if (orig_node.info.numkeys < orig_node.info.GetNumSlotsAsInterior()) { return ERROR_INSANE; }
+
+      return ERROR_UNIMPL;
+      break;
+
+    case BTREE_LEAF_NODE:
+      if (orig_node.info.numkeys < orig_node.info.GetNumSlotsAsLeaf()) { return ERROR_INSANE; }
+      
+      SIZE_T k2 = orig_node.info.numkeys/2;
+      SIZE_T k1 = orig_node.info.numkeys-k2;
+
+      // Make 
+      SIZE_T new_block_loc;
+      SIZE_T& new_block_ref = new_block_loc;
+      BTreeNode new_node;
+  
+      // Get block from AllocateNode and unserialize into new_node
+      rc = AllocateNode(new_block_ref);
+      if (rc) { return rc; }
+      rc = new_node.Unserialize(buffercache, new_block_ref);
+      if (rc) { return rc; }
+      
+      // Set new_node type and numkeys
+      new_node.info.nodetype=BTREE_LEAF_NODE;
+      new_node.info.numkeys=k2;
+      // Initialize new_node's data to all 0's
+      new_node.data = new char [left_node.info.GetNumDataBytes()];
+      memset(new_node.data,0,new_node.info.GetNumDataBytes());
+
+      // Iterator and temporary keys and values, used to copy data
+      SIZE_T i;
+      KEY_T temp_key;
+      KEY_T& temp_key_ref = temp_key;
+      VALUE_T temp_val;
+      VALUE_T& temp_val_ref = temp_val;
+      //
+      for(i=k1;i<orig_node.info.numkeys;i++) {
+        // Loop through orig_node.data, copying into new_node.data
+        
+        // Copy key
+        rc = orig_node.GetKey(i,temp_key_ref;
+        if (rc) { return rc; }
+        rc = new_node.SetKey(i-k1,temp_key_ref);
+        if (rc) { return rc; }
+        
+
+        // Copy value
+        rc = orig_node.GetKey(i,temp_val_ref);
+        if (rc) { return rc; }
+        rc = new_node.SetKey(i-k1,temp_val_ref);
+        if (rc) { return rc; }
+      }
+
+
+      //Set the original node's number of keys to k1, so that even though all the values of k2 still reside in
+      // the original node, they are effectively ignored.
+      orig_node.info.numkeys=k1;
+
+
+
+
+
+/*
+// Copy data from old node
+memcpy(new_node.data, orig_node.data + (k1*sizeof(SIZE_T)), (k2*sizeof(SIZE_T)));
+
+SIZE_T left_block_loc;
+SIZE_T& left_block_ref = left_block_loc;
+SIZE_T right_block_loc;
+SIZE_T& right_block_ref = right_block_loc;
+
+// Left node
+//
+// Get block offset from AllocateNode
+rc = AllocateNode(left_block_ref);
+if (rc) { return rc; }
+
+// Unserialize from block offset into left_node
+BTreeNode left_node;
+rc = left_node.Unserialize(buffercache,left_block_loc);	
+if (rc) { return rc; }
+*/
+ 
+  }
+}
   
 ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
 {
-  return Inserter(superblock.info.rootnode, key, value);
+  list<SIZE_T> crumbs;
+  return Inserter(crumbs, superblock.info.rootnode, key, value);
 }
 
 ERROR_T BTreeIndex::Update(const KEY_T &key, const VALUE_T &value)
@@ -643,30 +755,30 @@ ERROR_T BTreeIndex::DisplayInternal(const SIZE_T &node,
   }
 
   switch (b.info.nodetype) { 
-  case BTREE_ROOT_NODE:
-  case BTREE_INTERIOR_NODE:
-    if (b.info.numkeys>0) { 
-      for (offset=0;offset<=b.info.numkeys;offset++) { 
-	rc=b.GetPtr(offset,ptr);
-	if (rc) { return rc; }
-	if (display_type==BTREE_DEPTH_DOT) { 
-	  o << node << " -> "<<ptr<<";\n";
-	}
-	rc=DisplayInternal(ptr,o,display_type);
-	if (rc) { return rc; }
-      }
-    }
-    return ERROR_NOERROR;
-    break;
-  case BTREE_LEAF_NODE:
-    return ERROR_NOERROR;
-    break;
-  default:
+    case BTREE_ROOT_NODE:
+    case BTREE_INTERIOR_NODE:
+      if (b.info.numkeys>0) { 
+        for (offset=0;offset<=b.info.numkeys;offset++) { 
+    rc=b.GetPtr(offset,ptr);
+    if (rc) { return rc; }
     if (display_type==BTREE_DEPTH_DOT) { 
-    } else {
-      o << "DisplayInternal: Unsupported Node Type " << b.info.nodetype ;
+      o << node << " -> "<<ptr<<";\n";
     }
-    return ERROR_INSANE;
+    rc=DisplayInternal(ptr,o,display_type);
+    if (rc) { return rc; }
+        }
+      }
+      return ERROR_NOERROR;
+      break;
+    case BTREE_LEAF_NODE:
+      return ERROR_NOERROR;
+      break;
+    default:
+      if (display_type==BTREE_DEPTH_DOT) { 
+      } else {
+        o << "DisplayInternal: Unsupported Node Type " << b.info.nodetype ;
+      }
+      return ERROR_INSANE;
   }
 
   return ERROR_NOERROR;
