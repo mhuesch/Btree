@@ -26,9 +26,9 @@ KeyValuePair & KeyValuePair::operator=(const KeyValuePair &rhs)
 }
 
 BTreeIndex::BTreeIndex(SIZE_T keysize, 
-		       SIZE_T valuesize,
-		       BufferCache *cache,
-		       bool unique) 
+                       SIZE_T valuesize,
+                       BufferCache *cache,
+                       bool unique) 
 {
   superblock.info.keysize=keysize;
   superblock.info.valuesize=valuesize;
@@ -126,9 +126,9 @@ ERROR_T BTreeIndex::Attach(const SIZE_T initblock, const bool create)
     // root node at superblock_index+1
     // free space list for rest
     BTreeNode newsuperblock(BTREE_SUPERBLOCK,
-			    superblock.info.keysize,
-			    superblock.info.valuesize,
-			    buffercache->GetBlockSize());
+                            superblock.info.keysize,
+                            superblock.info.valuesize,
+                            buffercache->GetBlockSize());
     newsuperblock.info.rootnode=superblock_index+1;
     newsuperblock.info.freelist=superblock_index+2;
     newsuperblock.info.numkeys=0;
@@ -142,9 +142,9 @@ ERROR_T BTreeIndex::Attach(const SIZE_T initblock, const bool create)
     }
     
     BTreeNode newrootnode(BTREE_ROOT_NODE,
-			  superblock.info.keysize,
-			  superblock.info.valuesize,
-			  buffercache->GetBlockSize());
+                          superblock.info.keysize,
+                          superblock.info.valuesize,
+                          buffercache->GetBlockSize());
     newrootnode.info.rootnode=superblock_index+1;
     newrootnode.info.freelist=superblock_index+2;
     newrootnode.info.numkeys=0;
@@ -159,9 +159,9 @@ ERROR_T BTreeIndex::Attach(const SIZE_T initblock, const bool create)
 
     for (SIZE_T i=superblock_index+2; i<buffercache->GetNumBlocks();i++) { 
       BTreeNode newfreenode(BTREE_UNALLOCATED_BLOCK,
-			    superblock.info.keysize,
-			    superblock.info.valuesize,
-			    buffercache->GetBlockSize());
+                            superblock.info.keysize,
+                            superblock.info.valuesize,
+                            buffercache->GetBlockSize());
       newfreenode.info.rootnode=superblock_index+1;
       newfreenode.info.freelist= ((i+1)==buffercache->GetNumBlocks()) ? 0: i+1;
       
@@ -187,9 +187,9 @@ ERROR_T BTreeIndex::Detach(SIZE_T &initblock)
  
 
 ERROR_T BTreeIndex::LookupOrUpdateInternal(const SIZE_T &node,
-					   const BTreeOp op,
-					   const KEY_T &key,
-					   VALUE_T &value)
+                                           const BTreeOp op,
+                                           const KEY_T &key,
+                                           VALUE_T &value)
 {
   BTreeNode b;
   ERROR_T rc;
@@ -358,6 +358,7 @@ ERROR_T BTreeIndex::Lookup(const KEY_T &key, VALUE_T &value)
 ERROR_T BTreeIndex::Inserter(const SIZE_T &node, const KEY_T &key, const VALUE_T &value)
 {
   BTreeNode b;
+  BTreeNode& b_ref = b;
   ERROR_T rc;
   SIZE_T offset;
   KEY_T testkey;
@@ -369,11 +370,13 @@ ERROR_T BTreeIndex::Inserter(const SIZE_T &node, const KEY_T &key, const VALUE_T
   switch (b.info.nodetype) {
     case BTREE_ROOT_NODE:
       if (b.info.numkeys==0) {
+        //
+        // Special case where rootnode is empty
+
         SIZE_T left_block_loc;
         SIZE_T& left_block_ref = left_block_loc;
         SIZE_T right_block_loc;
         SIZE_T& right_block_ref = right_block_loc;
-
 
         // Left node
         //
@@ -483,81 +486,7 @@ ERROR_T BTreeIndex::Inserter(const SIZE_T &node, const KEY_T &key, const VALUE_T
       break;
 
     case BTREE_LEAF_NODE:
-
-      if (b.info.numkeys==0) {
-        // Special case where leaf node is empty. Insert at beginning.
-        
-        //Increment numkeys
-        b.info.numkeys++;
-
-        rc = b.SetKey(0,key);
-        if (rc) { return rc; }
-
-        rc = b.SetVal(0,value);
-        if (rc) { return rc; }
-
-        rc = b.Serialize(buffercache,node);
-        if (rc) { return rc; }
-
-        return ERROR_NOERROR;
-        break;
-      }
-
-      //
-      // Node has keys and values in it
-
-      for (offset=0;offset<b.info.numkeys;offset++) {
-        // move through keys until we find one larger than input key
-        rc=b.GetKey(offset,testkey);
-        if (rc) {  return rc; }
-        // If key exists, can't insert. Return conflict error.
-        if (key == testkey) { return ERROR_CONFLICT; }
-        // Otherwise, break loop and continue
-        if (key<testkey) { break; }
-      }
-
-      // Increment numkeys
-      b.info.numkeys++;
-
-      SIZE_T i;
-      for(i=(b.info.numkeys-2);i>=offset;--i) {
-        // Move back from largest key to offset key, shifting keys and values one to
-        // the right
-        
-        // Shift key
-        KEY_T temp_key;
-        KEY_T& temp_key_ref = temp_key;
-        rc=b.GetKey(i,temp_key_ref);
-        if (rc) { return rc; }
-        rc=b.SetKey(i+1,temp_key_ref);
-        if (rc) { return rc; }
-        
-        // Shift value
-        VALUE_T temp_val;
-        VALUE_T& temp_val_ref = temp_val;
-        rc=b.GetVal(i,temp_val_ref);
-        if (rc) { return rc; }
-        rc=b.SetVal(i+1,temp_val_ref);
-        if (rc) { return rc; }
-
-        // Rediculous hack because loop conditional doesn't work
-        if (i == offset) { break; }
-      }
-      
-      // Set input key
-      b.SetKey(offset,key);
-      if (rc) { return rc; }
-      
-      // Set input value
-      b.SetVal(offset,value);
-      if (rc) { return rc; }
-
-      // Serialize block
-      b.Serialize(buffercache,node);
-      if (rc) { return rc; }
-      
-      return ERROR_NOERROR;
-      break;
+      return LeafNodeInsert(node,b_ref,key,value);
 
     default:
       return ERROR_UNIMPL;
@@ -567,6 +496,97 @@ ERROR_T BTreeIndex::Inserter(const SIZE_T &node, const KEY_T &key, const VALUE_T
    return ERROR_INSANE;
 }
 
+ERROR_T BTreeIndex::LeafNodeInsert(const SIZE_T &node, BTreeNode &b, const KEY_T &key, const VALUE_T &value)
+{
+  ERROR_T rc;
+  SIZE_T offset;
+  KEY_T testkey;
+
+  if (b.info.nodetype!=BTREE_LEAF_NODE) {
+    // If we aren't in a leaf node, something bad has happened.
+    return ERROR_INSANE;
+  }
+
+  if (b.info.numkeys==0) {
+    // Special case where leaf node is empty. Insert at beginning.
+
+    //Increment numkeys
+    b.info.numkeys++;
+
+    rc = b.SetKey(0,key);
+    if (rc) { return rc; }
+
+    rc = b.SetVal(0,value);
+    if (rc) { return rc; }
+
+    rc = b.Serialize(buffercache,node);
+    if (rc) { return rc; }
+
+    return ERROR_NOERROR;
+  }
+
+  //
+  // Node has keys and values in it
+
+  for (offset=0;offset<b.info.numkeys;offset++) {
+    // move through keys until we find one larger than input key
+    rc=b.GetKey(offset,testkey);
+    if (rc) {  return rc; }
+    // If key exists, can't insert. Return conflict error.
+    if (key == testkey) { return ERROR_CONFLICT; }
+    // Otherwise, break loop and continue
+    if (key<testkey) { break; }
+  }
+
+  // Increment numkeys
+  b.info.numkeys++;
+
+  SIZE_T i;
+  for(i=(b.info.numkeys-2);i>=offset;--i) {
+    // Move back from largest key to offset key, shifting keys and values one to
+    // the right
+
+    // Shift key
+    KEY_T temp_key;
+    KEY_T& temp_key_ref = temp_key;
+    rc=b.GetKey(i,temp_key_ref);
+    if (rc) { return rc; }
+    rc=b.SetKey(i+1,temp_key_ref);
+    if (rc) { return rc; }
+
+    // Shift value
+    VALUE_T temp_val;
+    VALUE_T& temp_val_ref = temp_val;
+    rc=b.GetVal(i,temp_val_ref);
+    if (rc) { return rc; }
+    rc=b.SetVal(i+1,temp_val_ref);
+    if (rc) { return rc; }
+
+    // Rediculous hack because loop conditional doesn't work
+    if (i == offset) { break; }
+  }
+
+  // Set input key
+  b.SetKey(offset,key);
+  if (rc) { return rc; }
+
+  // Set input value
+  b.SetVal(offset,value);
+  if (rc) { return rc; }
+
+  // Serialize block
+  b.Serialize(buffercache,node);
+  if (rc) { return rc; }
+
+  cout << "Keys: " << b.info.numkeys << ". Upper bound: " << b.info.GetNumSlotsAsLeaf() << endl;
+  if (b.info.numkeys >= b.info.GetNumSlotsAsLeaf()) {
+    // We're at or over the slot upper bound
+    // Call splitter function.
+  }
+
+  // We're under the slot upper bound. All good
+  return ERROR_NOERROR;
+}
   
 ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
 {

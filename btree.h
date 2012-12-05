@@ -100,9 +100,14 @@ public:
   // we will return to you on the next attach
   ERROR_T Detach(SIZE_T &initblock);
  
-  // Our Inserter, called by Insert
+  // Our functions
+  //
+  // Inserter, called by Insert
   ERROR_T Inserter(const SIZE_T &node, const KEY_T &key, const VALUE_T &value);
-  
+
+  // LeafNodeInsert, called by Inserter
+  ERROR_T LeafNodeInsert(const SIZE_T &node, BTreeNode &b, const KEY_T&, const VALUE_T&); 
+   
   // return zero on success
   // return ERROR_NOSPACE if you run out of disk space
   // return ERROR_SIZE if the key or value are the wrong size for this index
