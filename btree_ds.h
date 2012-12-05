@@ -36,8 +36,8 @@ struct NodeMetadata {
   SIZE_T GetNumDataBytes() const;
   SIZE_T GetNumSlotsAsInterior() const;
   SIZE_T GetNumSlotsAsLeaf() const;
-  SIZE_T GetLowerBoundAsInterior() const
-  SIZE_T GetLowerBoundAsLeaf() const
+  SIZE_T GetLowerBoundAsInterior() const;
+  SIZE_T GetLowerBoundAsLeaf() const;
 
   ostream &Print(ostream &rhs) const;
 			  
