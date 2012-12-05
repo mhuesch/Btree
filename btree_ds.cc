@@ -27,6 +27,17 @@ SIZE_T NodeMetadata::GetNumSlotsAsLeaf() const
   return (GetNumDataBytes()-sizeof(SIZE_T))/(keysize+valuesize);  // floor intended
 }
 
+SIZE_T NodeMetadata::GetLowerBoundAsInterior() const
+{
+  return (GetNumSlotsAsInterior()/2);
+}
+
+SIZE_T NodeMetadata::GetLowerBoundAsLeaf() const
+{
+  return (GetNumSlotsAsLeaf()/2);
+}
+
+
 
 ostream & NodeMetadata::Print(ostream &os) const 
 {
