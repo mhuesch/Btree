@@ -578,7 +578,6 @@ ERROR_T BTreeIndex::LeafNodeInsert(const SIZE_T &node, BTreeNode &b, const KEY_T
   b.Serialize(buffercache,node);
   if (rc) { return rc; }
 
-  cout << "Keys: " << b.info.numkeys << ". Upper bound: " << b.info.GetNumSlotsAsLeaf() << endl;
   if (b.info.numkeys >= b.info.GetNumSlotsAsLeaf()) {
     // We're at or over the slot upper bound
     // Call splitter function.
