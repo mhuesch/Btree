@@ -211,7 +211,7 @@ ERROR_T BTreeIndex::LookupOrUpdateInternal(const SIZE_T &node,
     for (offset=0;offset<b.info.numkeys;offset++) { 
       rc=b.GetKey(offset,testkey);
       if (rc) {  return rc; }
-      if (key<testkey || key==testkey) {
+      if (key<testkey) {
         // OK, so we now have the first key that's larger
         // so we ned to recurse on the ptr immediately previous to 
         // this one, if it exists
@@ -397,16 +397,8 @@ ERROR_T BTreeIndex::Inserter(list<SIZE_T> crumbs, const SIZE_T &node, const KEY_
         left_node.data = new char [left_node.info.GetNumDataBytes()];
         memset(left_node.data,0,left_node.info.GetNumDataBytes());
 
-        // Set number of keys in left_node to 1
-        left_node.info.numkeys = 1;
-
-        // Set key of left_node
-        rc = left_node.SetKey(0,key);
-        if (rc) { return rc; }
-
-        // Set value in left_node
-        rc = left_node.SetVal(0,value);
-        if (rc) { return rc; }
+        // Set number of keys in left_node to 0
+        left_node.info.numkeys = 0;
 
         // Serialize left_node back into buffer
         rc = left_node.Serialize(buffercache,left_block_loc);
@@ -429,8 +421,16 @@ ERROR_T BTreeIndex::Inserter(list<SIZE_T> crumbs, const SIZE_T &node, const KEY_
         right_node.data = new char [right_node.info.GetNumDataBytes()];
         memset(right_node.data,0,right_node.info.GetNumDataBytes());
 
-        // Set number of keys in right_node to 0
-        right_node.info.numkeys = 0;
+        // Set number of keys in right_node to 1
+        right_node.info.numkeys = 1;
+
+        // Set key of right_node
+        rc = right_node.SetKey(0,key);
+        if (rc) { return rc; }
+
+        // Set value in right_node
+        rc = right_node.SetVal(0,value);
+        if (rc) { return rc; }
 
         // Serialize right_node back into buffer
         rc = right_node.Serialize(buffercache,right_block_loc);
@@ -468,7 +468,7 @@ ERROR_T BTreeIndex::Inserter(list<SIZE_T> crumbs, const SIZE_T &node, const KEY_
       for (offset=0;offset<b.info.numkeys;offset++) { 
         rc=b.GetKey(offset,testkey);
         if (rc) {  return rc; }
-        if (key<testkey || key==testkey) {
+        if (key<testkey) {
           // OK, so we now have the first key that's larger
           // so we ned to recurse on the ptr immediately previous to 
           // this one, if it exists
