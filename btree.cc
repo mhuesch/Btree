@@ -212,12 +212,12 @@ ERROR_T BTreeIndex::LookupOrUpdateInternal(const SIZE_T &node,
       rc=b.GetKey(offset,testkey);
       if (rc) {  return rc; }
       if (key<testkey || key==testkey) {
-	// OK, so we now have the first key that's larger
-	// so we ned to recurse on the ptr immediately previous to 
-	// this one, if it exists
-	rc=b.GetPtr(offset,ptr);
-	if (rc) { return rc; }
-	return LookupOrUpdateInternal(ptr,op,key,value);
+        // OK, so we now have the first key that's larger
+        // so we ned to recurse on the ptr immediately previous to 
+        // this one, if it exists
+        rc=b.GetPtr(offset,ptr);
+        if (rc) { return rc; }
+        return LookupOrUpdateInternal(ptr,op,key,value);
       }
     }
     // if we got here, we need to go to the next pointer, if it exists
@@ -587,7 +587,7 @@ ERROR_T BTreeIndex::LeafNodeInsert(list<SIZE_T> crumbs, const SIZE_T &node, BTre
   if (b.info.numkeys >= b.info.GetNumSlotsAsLeaf()) {
     // We're at or over the slot upper bound
     // Call splitter function.
-    Split(crumbs);
+    //Split(crumbs);
   }
 
   // We're under the slot upper bound. All good
@@ -610,6 +610,27 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
   rc = orig_node.Unserialize(buffercache,orig_block_ref);
   if (rc) { return rc; }
 
+  // To hold the key sizes for the split blocks
+  SIZE_T k2;
+  SIZE_T k1;
+
+  // Pointer to new block location and reference to it and new node
+  SIZE_T new_block_loc;
+  SIZE_T& new_block_ref = new_block_loc;
+  BTreeNode new_node;
+  
+
+  // Iterator and temporary keys and values, used to copy data
+  SIZE_T i;
+  KEY_T temp_key;
+  KEY_T& temp_key_ref = temp_key;
+  VALUE_T temp_val;
+  VALUE_T& temp_val_ref = temp_val;
+
+  // Null pointer used to set copied values to NULL in old_node
+  SIZE_T null_ptr = 0;
+  SIZE_T& null_ptr_ref = null_ptr;
+
   switch (orig_node.info.nodetype) { 
     case BTREE_ROOT_NODE:
       // Falls through into interior node
@@ -622,14 +643,10 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
     case BTREE_LEAF_NODE:
       if (orig_node.info.numkeys < orig_node.info.GetNumSlotsAsLeaf()) { return ERROR_INSANE; }
       
-      SIZE_T k2 = orig_node.info.numkeys/2;
-      SIZE_T k1 = orig_node.info.numkeys-k2;
-
-      // Make 
-      SIZE_T new_block_loc;
-      SIZE_T& new_block_ref = new_block_loc;
-      BTreeNode new_node;
-  
+      // Set number of keys for new blocks
+      k2 = orig_node.info.numkeys/2;
+      k1 = orig_node.info.numkeys-k2;
+        
       // Get block from AllocateNode and unserialize into new_node
       rc = AllocateNode(new_block_ref);
       if (rc) { return rc; }
@@ -643,13 +660,6 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
       new_node.data = new char [new_node.info.GetNumDataBytes()];
       memset(new_node.data,0,new_node.info.GetNumDataBytes());
 
-      // Iterator and temporary keys and values, used to copy data
-      SIZE_T i;
-      KEY_T temp_key;
-      KEY_T& temp_key_ref = temp_key;
-      VALUE_T temp_val;
-      VALUE_T& temp_val_ref = temp_val;
-      //
       for(i=k1;i<orig_node.info.numkeys;i++) {
         // Loop through orig_node.data, copying into new_node.data
         
@@ -658,8 +668,8 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
         if (rc) { return rc; }
         rc = new_node.SetKey(i-k1,temp_key_ref);
         if (rc) { return rc; }
-        // Set key that was copied to null
-        rc = orig_node.SetKey(i,0);
+        // Set key that was copied to NULL
+        rc = orig_node.SetKey(i,null_ptr_ref);
         if (rc) { return rc; }
         
 
@@ -668,20 +678,38 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
         if (rc) { return rc; }
         rc = new_node.SetVal(i-k1,temp_val_ref);
         if (rc) { return rc; }
-        // Set value that was copied to null
-        rc = orig_node.SetVal(i,0);
+        // Set value that was copied to NULL
+        rc = orig_node.SetVal(i,null_ptr_ref);
         if (rc) { return rc; }
       }
 
       //Set the original node's number of keys to k1, so that even though all the values of k2 still reside in
       // the original node, they are effectively ignored.
       orig_node.info.numkeys=k1;
+
+
+      // Serialize new_node
+      new_node.Serialize(buffercache,new_block_ref);
+
+      // Get the first key in the new_node. This is the key we'll 
+      //rc = new_node.GetKey(0,temp_key_ref);
+      //if (rc) { return rc; }
+
+      // Insert a pointer to it into the parent node of orig_node, using InternalPointerInsert function
+      //InternalPointerInsert(crumbs, temp_key, );
+      return ERROR_NOERROR;
+      break;
  
-    case default:
+    default:
       return ERROR_INSANE;
       break;
   }
   return ERROR_INSANE;
+}
+
+ERROR_T BTreeIndex::InternalPointerInsert(list<SIZE_T>, const KEY_T &key, const SIZE_T &ptr)
+{
+  return ERROR_UNIMPL;
 }
   
 ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)

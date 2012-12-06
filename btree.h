@@ -111,7 +111,12 @@ public:
 
   // Splitter function
   ERROR_T Split(list<SIZE_T> crumbs);
-   
+
+  // Insert a pointer into an Internal node and call split if necessary
+  ERROR_T InternalPointerInsert(list<SIZE_T>, const KEY_T &key, const SIZE_T &ptr);
+  
+  //
+  //
   //
   // return zero on success
   // return ERROR_NOSPACE if you run out of disk space
