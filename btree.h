@@ -113,7 +113,7 @@ public:
   ERROR_T Split(list<SIZE_T> crumbs);
 
   // Insert a pointer into an Internal node and call split if necessary
-  ERROR_T InternalPointerInsert(list<SIZE_T>, const KEY_T &key, const SIZE_T &ptr);
+  ERROR_T InteriorPointerInsert(list<SIZE_T>, const KEY_T &key, const SIZE_T &ptr);
   
   //
   //

@@ -24,6 +24,7 @@ const ERROR_T ERROR_BADCONFIG=-12;
 const ERROR_T ERROR_NOFILE=-13;
 const ERROR_T ERROR_UNIMPL=-14;
 const ERROR_T ERROR_INSANE=-15;
+const ERROR_T ERROR_BADNODETYPE=-16;
 
 struct GenericException {};
 

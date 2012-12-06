@@ -91,13 +91,13 @@ int main(int argc, char *argv[])
       VALUE_T lookup_value;
       if ((rc=btree->Lookup(KEY_T(key.c_str()),lookup_value))!=ERROR_NOERROR) { 
         cout <<"FAIL"<< endl;
-	cerr <<"Can't lookup due to error "<<rc<<endl;
+    	cerr <<"Can't lookup due to error "<<rc<<endl;
       } else {
         cout <<"OK ";
- 	for (unsigned int k=0; k<lookup_value.length; k++) {
- 	    cout << lookup_value.data[k];
-	}
- 	cout << endl;
+     	for (unsigned int k=0; k<lookup_value.length; k++) {
+     	    cout << lookup_value.data[k];
+    	}
+     	cout << endl;
       }
     } else if (action == "DISPLAY") {
       // This should always be OK

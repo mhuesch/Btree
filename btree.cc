@@ -168,7 +168,7 @@ ERROR_T BTreeIndex::Attach(const SIZE_T initblock, const bool create)
       rc = newfreenode.Serialize(buffercache,i);
 
       if (rc) {
-	return rc;
+        return rc;
       }
 
     }
@@ -368,7 +368,7 @@ ERROR_T BTreeIndex::Inserter(list<SIZE_T> crumbs, const SIZE_T &node, const KEY_
   crumbs.push_front(node);
 
   rc = b.Unserialize(buffercache,node);
-  if (rc!=ERROR_NOERROR) { return rc; }
+  if (rc) { return rc; }
 
   switch (b.info.nodetype) {
     case BTREE_ROOT_NODE:
@@ -505,9 +505,18 @@ ERROR_T BTreeIndex::LeafNodeInsert(list<SIZE_T> crumbs, const SIZE_T &node, BTre
   SIZE_T offset;
   KEY_T testkey;
 
+  // Iterator and temporary keys and values, used to copy data
+  SIZE_T iter;
+  KEY_T temp_key;
+  KEY_T& temp_key_ref = temp_key;
+  VALUE_T temp_val;
+  VALUE_T& temp_val_ref = temp_val;
+
+  //---------------//
+
   if (b.info.nodetype!=BTREE_LEAF_NODE) {
     // If we aren't in a leaf node, something bad has happened.
-    return ERROR_INSANE;
+    return ERROR_BADNODETYPE;
   }
 
   if (b.info.numkeys==0) {
@@ -545,31 +554,24 @@ ERROR_T BTreeIndex::LeafNodeInsert(list<SIZE_T> crumbs, const SIZE_T &node, BTre
   // Increment numkeys
   b.info.numkeys++;
 
-  // Iterator and temporary keys and values, used to copy data
-  SIZE_T i;
-  KEY_T temp_key;
-  KEY_T& temp_key_ref = temp_key;
-  VALUE_T temp_val;
-  VALUE_T& temp_val_ref = temp_val;
-  //
-  for(i=(b.info.numkeys-2);i>=offset;--i) {
-    // Move back from largest key to offset key, shifting keys and values one to
-    // the right
+  // Move back from largest key to offset key, shifting keys and values one to
+  // the right
+  for(iter=(b.info.numkeys-2);iter>=offset;iter--) {
 
     // Shift key
-    rc = b.GetKey(i,temp_key_ref);
+    rc = b.GetKey(iter,temp_key_ref);
     if (rc) { return rc; }
-    rc = b.SetKey(i+1,temp_key_ref);
+    rc = b.SetKey(iter+1,temp_key_ref);
     if (rc) { return rc; }
 
     // Shift value
-    rc = b.GetVal(i,temp_val_ref);
+    rc = b.GetVal(iter,temp_val_ref);
     if (rc) { return rc; }
-    rc = b.SetVal(i+1,temp_val_ref);
+    rc = b.SetVal(iter+1,temp_val_ref);
     if (rc) { return rc; }
 
-    // Ridiculous hack because loop conditional doesn't work
-    if (i == offset) { break; }
+  // Test if pointers are equal, since >= doesn't work with pointers. Break loop if they are
+    if (iter == offset) { break; }
   }
 
   // Set input key
@@ -586,11 +588,10 @@ ERROR_T BTreeIndex::LeafNodeInsert(list<SIZE_T> crumbs, const SIZE_T &node, BTre
 
   if (b.info.numkeys >= b.info.GetNumSlotsAsLeaf()) {
     // We're at or over the slot upper bound
-    // Call splitter function.
-    //Split(crumbs);
+    rc = Split(crumbs);
+    if (rc) { return rc; }
   }
 
-  // We're under the slot upper bound. All good
   return ERROR_NOERROR;
 }
 
@@ -621,7 +622,7 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
   
 
   // Iterator and temporary keys and values, used to copy data
-  SIZE_T i;
+  SIZE_T iter;
   KEY_T temp_key;
   KEY_T& temp_key_ref = temp_key;
   VALUE_T temp_val;
@@ -660,26 +661,26 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
       new_node.data = new char [new_node.info.GetNumDataBytes()];
       memset(new_node.data,0,new_node.info.GetNumDataBytes());
 
-      for(i=k1;i<orig_node.info.numkeys;i++) {
+      for(iter=k1;iter<orig_node.info.numkeys;iter++) {
         // Loop through orig_node.data, copying into new_node.data
         
         // Copy key
-        rc = orig_node.GetKey(i,temp_key_ref);
+        rc = orig_node.GetKey(iter,temp_key_ref);
         if (rc) { return rc; }
-        rc = new_node.SetKey(i-k1,temp_key_ref);
+        rc = new_node.SetKey(iter-k1,temp_key_ref);
         if (rc) { return rc; }
         // Set key that was copied to NULL
-        rc = orig_node.SetKey(i,null_ptr_ref);
+        rc = orig_node.SetKey(iter,null_ptr_ref);
         if (rc) { return rc; }
         
 
         // Copy value
-        rc = orig_node.GetVal(i,temp_val_ref);
+        rc = orig_node.GetVal(iter,temp_val_ref);
         if (rc) { return rc; }
-        rc = new_node.SetVal(i-k1,temp_val_ref);
+        rc = new_node.SetVal(iter-k1,temp_val_ref);
         if (rc) { return rc; }
         // Set value that was copied to NULL
-        rc = orig_node.SetVal(i,null_ptr_ref);
+        rc = orig_node.SetVal(iter,null_ptr_ref);
         if (rc) { return rc; }
       }
 
@@ -691,25 +692,112 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
       // Serialize new_node
       new_node.Serialize(buffercache,new_block_ref);
 
-      // Get the first key in the new_node. This is the key we'll 
-      //rc = new_node.GetKey(0,temp_key_ref);
-      //if (rc) { return rc; }
+      // Get the first key in the new_node. This is the key we'll insert into the parent. The right pointer of the key
+      // will point to new_node.
+      rc = new_node.GetKey(0,temp_key_ref);
+      if (rc) { return rc; }
 
       // Insert a pointer to it into the parent node of orig_node, using InternalPointerInsert function
-      //InternalPointerInsert(crumbs, temp_key, );
+      rc = InteriorPointerInsert(crumbs, temp_key, new_block_ref);
+      if (rc) { return rc; }
+
       return ERROR_NOERROR;
       break;
+
  
     default:
       return ERROR_INSANE;
       break;
   }
+
+  // We shouldn't reach here
   return ERROR_INSANE;
 }
 
-ERROR_T BTreeIndex::InternalPointerInsert(list<SIZE_T>, const KEY_T &key, const SIZE_T &ptr)
+ERROR_T BTreeIndex::InteriorPointerInsert(list<SIZE_T> crumbs, const KEY_T &key, const SIZE_T &ptr)
 {
-  return ERROR_UNIMPL;
+  BTreeNode b;
+  ERROR_T rc;
+  SIZE_T offset;
+  KEY_T testkey;
+
+  // Iterator and temporary keys and pointers, used to copy data
+  SIZE_T iter;
+  KEY_T temp_key;
+  KEY_T& temp_key_ref = temp_key;
+  SIZE_T temp_ptr;
+  SIZE_T& temp_ptr_ref = temp_ptr;
+
+  //---------------//
+
+  // Crumbs should never be empty
+  if (crumbs.empty()) { return ERROR_INSANE; }
+
+  // node is first node in crumbs list. Don't pop so that Split will look at this node.
+  const SIZE_T& node = crumbs.front();
+
+  rc = b.Unserialize(buffercache,node);
+  if (rc) { return rc; }
+
+  // Check nodetype. If it isn't an interior node or the root node, error.
+  if (b.info.nodetype != BTREE_INTERIOR_NODE && b.info.nodetype != BTREE_ROOT_NODE)
+  {
+    return ERROR_BADNODETYPE;
+  }
+
+  for (offset=0; offset<b.info.numkeys; offset++) {
+    // Move through keys until we find one larger than input key
+    rc = b.GetKey(offset,testkey);
+    if (rc) { return rc; }
+    // If key exists, conflict error.
+    if (key == testkey) { return ERROR_CONFLICT; }
+    // Otherwise, break loop
+    if (key<testkey) { break; }
+  }
+
+  // Increment numkeys
+  b.info.numkeys++;
+
+  // Move back from largest key to offset key, shifting keys and pointers
+  // one slot to the right
+  for (iter=b.info.numkeys-2; iter>=offset; iter--) {
+
+    // Shift key
+    rc = b.GetKey(iter,temp_key_ref);
+    if (rc) { return rc; }
+    rc = b.SetKey(iter+1,temp_key_ref);
+    if (rc) { return rc; }
+
+    //Shift pointer
+    rc = b.GetPtr(iter+1,temp_ptr_ref);
+    if (rc) { return rc; }
+    rc = b.SetPtr(iter+2,temp_ptr_ref);
+    if (rc) { return rc; }
+
+    // Test if pointers are equal, since >= doesn't work with pointers. Break loop if they are
+    if (iter == offset) { break; }
+  }
+
+  // Set input key
+  rc = b.SetKey(offset,key);
+  if (rc) { return rc; }
+
+  // Set input ptr
+  rc = b.SetPtr(offset,ptr);
+  if (rc) { return rc; }
+
+  // Serialize block
+  rc = b.Serialize(buffercache,node);
+  if (rc) { return rc; }
+
+  if (b.info.numkeys >= b.info.GetNumSlotsAsInterior()) {
+    // We're at or over the slot upper bound
+    rc = Split(crumbs);
+    if (rc) { return rc; }
+  }
+
+  return ERROR_NOERROR;  
+  
 }
   
 ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
