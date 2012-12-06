@@ -658,12 +658,18 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
         if (rc) { return rc; }
         rc = new_node.SetKey(i-k1,temp_key_ref);
         if (rc) { return rc; }
+        // Set key that was copied to null
+        rc = orig_node.SetKey(i,0);
+        if (rc) { return rc; }
         
 
         // Copy value
         rc = orig_node.GetVal(i,temp_val_ref);
         if (rc) { return rc; }
         rc = new_node.SetVal(i-k1,temp_val_ref);
+        if (rc) { return rc; }
+        // Set value that was copied to null
+        rc = orig_node.SetVal(i,0);
         if (rc) { return rc; }
       }
 
