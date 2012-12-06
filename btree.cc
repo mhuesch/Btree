@@ -772,6 +772,7 @@ ERROR_T BTreeIndex::Display(ostream &o, BTreeDisplayType display_type) const
     o << "digraph tree { \n";
   }
   rc=DisplayInternal(superblock.info.rootnode,o,display_type);
+  if (rc) { return rc; }
   if (display_type==BTREE_DEPTH_DOT) { 
     o << "}\n";
   }
