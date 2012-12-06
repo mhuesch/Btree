@@ -671,6 +671,9 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
       // the original node, they are effectively ignored.
       orig_node.info.numkeys=k1;
  
+    case default:
+      return ERROR_INSANE;
+      break;
   }
   return ERROR_INSANE;
 }
