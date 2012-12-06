@@ -489,7 +489,7 @@ ERROR_T BTreeIndex::Inserter(list<SIZE_T> crumbs, const SIZE_T &node, const KEY_
       break;
 
     case BTREE_LEAF_NODE:
-      return LeafNodeInsert(node,b_ref,key,value);
+      return LeafNodeInsert(crumbs, node ,b_ref, key, value);
 
     default:
       return ERROR_UNIMPL;
@@ -499,7 +499,7 @@ ERROR_T BTreeIndex::Inserter(list<SIZE_T> crumbs, const SIZE_T &node, const KEY_
    return ERROR_INSANE;
 }
 
-ERROR_T BTreeIndex::LeafNodeInsert(const SIZE_T &node, BTreeNode &b, const KEY_T &key, const VALUE_T &value)
+ERROR_T BTreeIndex::LeafNodeInsert(list<SIZE_T> crumbs, const SIZE_T &node, BTreeNode &b, const KEY_T &key, const VALUE_T &value)
 {
   ERROR_T rc;
   SIZE_T offset;
@@ -568,7 +568,7 @@ ERROR_T BTreeIndex::LeafNodeInsert(const SIZE_T &node, BTreeNode &b, const KEY_T
     rc = b.SetVal(i+1,temp_val_ref);
     if (rc) { return rc; }
 
-    // Rediculous hack because loop conditional doesn't work
+    // Ridiculous hack because loop conditional doesn't work
     if (i == offset) { break; }
   }
 
@@ -587,6 +587,7 @@ ERROR_T BTreeIndex::LeafNodeInsert(const SIZE_T &node, BTreeNode &b, const KEY_T
   if (b.info.numkeys >= b.info.GetNumSlotsAsLeaf()) {
     // We're at or over the slot upper bound
     // Call splitter function.
+    Split(crumbs);
   }
 
   // We're under the slot upper bound. All good
@@ -614,7 +615,7 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
       // Falls through into interior node
     case BTREE_INTERIOR_NODE:
       if (orig_node.info.numkeys < orig_node.info.GetNumSlotsAsInterior()) { return ERROR_INSANE; }
-
+      
       return ERROR_UNIMPL;
       break;
 
@@ -660,43 +661,18 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
         
 
         // Copy value
-        rc = orig_node.GetKey(i,temp_val_ref);
+        rc = orig_node.GetVal(i,temp_val_ref);
         if (rc) { return rc; }
-        rc = new_node.SetKey(i-k1,temp_val_ref);
+        rc = new_node.SetVal(i-k1,temp_val_ref);
         if (rc) { return rc; }
       }
-
 
       //Set the original node's number of keys to k1, so that even though all the values of k2 still reside in
       // the original node, they are effectively ignored.
       orig_node.info.numkeys=k1;
-
-
-
-
-
-/*
-// Copy data from old node
-memcpy(new_node.data, orig_node.data + (k1*sizeof(SIZE_T)), (k2*sizeof(SIZE_T)));
-
-SIZE_T left_block_loc;
-SIZE_T& left_block_ref = left_block_loc;
-SIZE_T right_block_loc;
-SIZE_T& right_block_ref = right_block_loc;
-
-// Left node
-//
-// Get block offset from AllocateNode
-rc = AllocateNode(left_block_ref);
-if (rc) { return rc; }
-
-// Unserialize from block offset into left_node
-BTreeNode left_node;
-rc = left_node.Unserialize(buffercache,left_block_loc);	
-if (rc) { return rc; }
-*/
  
   }
+  return ERROR_INSANE;
 }
   
 ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)

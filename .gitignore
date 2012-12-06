@@ -20,5 +20,5 @@ writebuffer
 writedisk
 TEST*
 __test*
-
+TAGS
 mydisk*

@@ -107,7 +107,7 @@ public:
   ERROR_T Inserter(list<SIZE_T> crumbs, const SIZE_T &node, const KEY_T &key, const VALUE_T &value);
 
   // LeafNodeInsert, called by Inserter
-  ERROR_T LeafNodeInsert(const SIZE_T &node, BTreeNode &b, const KEY_T&, const VALUE_T&); 
+  ERROR_T LeafNodeInsert(list<SIZE_T> crumbs, const SIZE_T &node, BTreeNode &b, const KEY_T&, const VALUE_T&); 
 
   // Splitter function
   ERROR_T Split(list<SIZE_T> crumbs);
