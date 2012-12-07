@@ -625,38 +625,171 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
   SIZE_T iter;
   KEY_T temp_key;
   KEY_T& temp_key_ref = temp_key;
+  SIZE_T temp_ptr;
+  SIZE_T& temp_ptr_ref = temp_ptr;
   VALUE_T temp_val;
   VALUE_T& temp_val_ref = temp_val;
+
+  unsigned int i;
+  string null_key_str;
+  for (i = 0; i < superblock.info.keysize; i++) {
+    null_key_str = "0" + null_key_str;
+  }
+
+  string null_val_str;
 
   // Null pointer used to set copied values to NULL in old_node
   SIZE_T null_ptr = 0;
   SIZE_T& null_ptr_ref = null_ptr;
-
-  unsigned int i;
-  string key_str;
-  for (i = 0; i < superblock.info.keysize; i++) {
-    key_str = "0" + key_str;
-  }
-
-  string val_str;
-  for (i = 0; i < superblock.info.valuesize; i++) {
-    val_str = "0" + val_str;
-  }
 
 
   switch (orig_node.info.nodetype) { 
     case BTREE_ROOT_NODE:
       // Falls through into interior node
     case BTREE_INTERIOR_NODE:
+
+
       if (orig_node.info.numkeys < orig_node.info.GetNumSlotsAsInterior()) { return ERROR_INSANE; }
       
-      return ERROR_UNIMPL;
+      // Numbers of keys for blocks that result from split
+      k1 = orig_node.info.numkeys/2;
+      k2 = orig_node.info.numkeys-k1-1;
+
+      // Get block from AllocateNode and unserialize into new_node
+      rc = AllocateNode(new_block_ref);
+      if (rc) { cout<<rc<<endl; return rc; }
+      rc = new_node.Unserialize(buffercache, new_block_ref);
+      if (rc) { return rc; }
+
+      // Set new_node type and numkeys
+      new_node.info.nodetype=BTREE_INTERIOR_NODE;
+      new_node.info.numkeys=k2;
+      // Initialize new_node's data to all 0's
+      new_node.data = new char [new_node.info.GetNumDataBytes()];
+      memset(new_node.data,0,new_node.info.GetNumDataBytes());
+
+      // Loop through orig_node, copying into new_node
+      for (iter=k1+1; iter<orig_node.info.numkeys; iter++) {
+        
+        // Copy key
+        rc = orig_node.GetKey(iter,temp_key_ref);
+        if (rc) { return rc; }
+        rc = new_node.SetKey(iter-(k1+1),temp_key_ref);
+        if (rc) { return rc; }
+        // Set copied key to 0
+        rc = orig_node.SetKey(iter,KEY_T(null_key_str.c_str()));
+        if (rc) { return rc; }
+
+        // Copy pointer
+        rc = orig_node.GetPtr(iter,temp_ptr_ref);
+        if (rc) { return rc; }
+        rc = new_node.SetPtr(iter-(k1+1),temp_ptr_ref);
+        if (rc) { return rc; }
+        // Set copied pointer to 0
+        rc = orig_node.SetPtr(iter,SIZE_T(null_ptr_ref));
+        if (rc) { return rc; }
+      }
+
+      // Set key at index k1 of orig_node to null. It is unneeded after the split.
+      rc = orig_node.SetKey(k1,KEY_T(null_key_str.c_str()));
+      if (rc) { return rc; }
+
+      // Copy last pointer in orig_node to new_node
+      rc = orig_node.GetPtr(orig_node.info.numkeys,temp_ptr_ref);
+      if (rc) { return rc; }
+      rc = new_node.SetPtr(k1,temp_ptr_ref);
+      // Set pointer to 0
+      rc = orig_node.SetPtr(orig_node.info.numkeys,null_ptr_ref);
+      if (rc) { return rc; }
+
+      // Set numkeys of orig_node to k1
+      orig_node.info.numkeys=k1;
+
+      //
+      // Different ending depending on ROOT_NODE vs INTERIOR NODE
+      if (orig_node.info.nodetype == BTREE_INTERIOR_NODE) {
+        // Serialize orig_node and new_node
+        rc = orig_node.Serialize(buffercache, orig_block_ref);
+        if (rc) { return rc; }
+        rc = new_node.Serialize(buffercache, new_block_ref);
+        if (rc) { return rc; }
+
+        // Get the first key in the new_node. This is the key we'll insert into the parent.
+        rc = new_node.GetKey(0,temp_key_ref);
+        if (rc) { return rc; }
+
+        // Insert a pointer to it into the parent node of orig_node, using InternalPointerInsert
+        rc = InteriorPointerInsert(crumbs, temp_key, new_block_ref);
+        if (rc) { return rc; }
+
+        return ERROR_NOERROR;
+      } else {
+        // orig_node is now an interior node, so set it as such
+        orig_node.info.nodetype=BTREE_INTERIOR_NODE;
+
+        //
+        // We need to create a new root node, set the superblock to point at it, and insert both
+        // orig_node and new_node into it.
+        SIZE_T new_root_loc;
+        SIZE_T& new_root_ref = new_root_loc;
+        BTreeNode new_root;
+
+        // Allocate new root node
+        rc = AllocateNode(new_root_ref);
+        if (rc) { cout<<rc<<endl; return rc; }
+        rc = new_root.Unserialize(buffercache, new_root_ref);
+        if (rc) { return rc; }
+
+        // Set new_root type, numkeys, and data
+        new_root.info.nodetype=BTREE_ROOT_NODE;
+        new_root.info.numkeys=1;
+        new_root.data = new char [new_root.info.GetNumDataBytes()];
+        memset(new_root.data,0,new_root.info.GetNumDataBytes());
+
+        // Set superblock to point to new_root
+        superblock.info.rootnode = new_root_loc;
+
+        // Serialize orig_node, and new_node
+        rc = orig_node.Serialize(buffercache,orig_block_ref);
+        if (rc) { return rc; }
+        rc = new_node.Serialize(buffercache,new_block_ref);
+        if (rc) { return rc; }
+
+        // Must insert manually into new_root
+        //
+        // Use first key in new_node as the first key in new_root
+        rc = new_node.GetKey(0,temp_key_ref);
+        if (rc) { return rc; }
+        // Set it in new_root
+        rc = new_root.SetKey(0,temp_key_ref);
+        if (rc) { return rc; }
+        // Insert pointers to orig_node and new_node
+        rc = new_root.SetPtr(0,orig_block_ref);
+        if (rc) { return rc; }
+        rc = new_root.SetPtr(1,new_block_ref);
+        if (rc) { return rc; }
+        // Serialize new_root
+        rc = new_root.Serialize(buffercache,new_root_ref);
+        if (rc) { return rc; }
+
+        return ERROR_NOERROR;
+      }
+
+      // Control shouldn't reach here
+      return ERROR_INSANE;
       break;
 
     case BTREE_LEAF_NODE:
+      
+      // Build up null_val_str of 0's.
+      for (i = 0; i < superblock.info.valuesize; i++) {
+        null_val_str = "0" + null_val_str;
+      }
+
+
       if (orig_node.info.numkeys < orig_node.info.GetNumSlotsAsLeaf()) { return ERROR_INSANE; }
       
-      // Set number of keys for new blocks
+      // Numbers of keys for blocks that result from split
       k2 = orig_node.info.numkeys/2;
       k1 = orig_node.info.numkeys-k2;
         
@@ -673,47 +806,42 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
       new_node.data = new char [new_node.info.GetNumDataBytes()];
       memset(new_node.data,0,new_node.info.GetNumDataBytes());
 
+      // Loop through orig_node, copying into new_node
       for(iter=k1;iter<orig_node.info.numkeys;iter++) {
-        // Loop through orig_node.data, copying into new_node.data
         
         // Copy key
         rc = orig_node.GetKey(iter,temp_key_ref);
         if (rc) { return rc; }
         rc = new_node.SetKey(iter-k1,temp_key_ref);
         if (rc) { return rc; }
-        // Set copied key to NULL
-        rc = orig_node.SetKey(iter,KEY_T(key_str.c_str()));
+        // Set copied key to 0
+        rc = orig_node.SetKey(iter,KEY_T(null_key_str.c_str()));
         if (rc) { return rc; }
-        
 
         // Copy value
         rc = orig_node.GetVal(iter,temp_val_ref);
         if (rc) { return rc; }
         rc = new_node.SetVal(iter-k1,temp_val_ref);
         if (rc) { return rc; }
-        // Set copied value to NULL
-        rc = orig_node.SetVal(iter,VALUE_T(val_str.c_str()));
+        // Set copied value to 0
+        rc = orig_node.SetVal(iter,VALUE_T(null_val_str.c_str()));
         if (rc) { return rc; }
       }
 
-      //Set the original node's number of keys to k1, so that even though all the values of k2 still reside in
-      // the original node, they are effectively ignored.
+      //Set the original node's number of keys to k1
       orig_node.info.numkeys=k1;
 
-      // Serialize old_node
+      // Serialize orig_node and new_node
       rc = orig_node.Serialize(buffercache,orig_block_ref);
       if (rc) { return rc; }
-
-      // Serialize new_node
       rc = new_node.Serialize(buffercache,new_block_ref);
       if (rc) { return rc; }
 
-      // Get the first key in the new_node. This is the key we'll insert into the parent. The right pointer of the key
-      // will point to new_node.
+      // Get the first key in the new_node. This is the key we'll insert into the parent.
       rc = new_node.GetKey(0,temp_key_ref);
       if (rc) { return rc; }
 
-      // Insert a pointer to it into the parent node of orig_node, using InternalPointerInsert function
+      // Insert a pointer to it into the parent node of orig_node, using InternalPointerInsert
       rc = InteriorPointerInsert(crumbs, temp_key, new_block_ref);
       if (rc) { return rc; }
 
@@ -759,6 +887,12 @@ ERROR_T BTreeIndex::InteriorPointerInsert(list<SIZE_T> crumbs, const KEY_T &key,
   if (b.info.nodetype != BTREE_INTERIOR_NODE && b.info.nodetype != BTREE_ROOT_NODE)
   {
     return ERROR_BADNODETYPE;
+  }
+
+  //
+  // Node shouldn't be empty.
+  if (b.info.numkeys == 0) {
+    return ERROR_INSANE;
   }
 
   for (offset=0; offset<b.info.numkeys; offset++) {
@@ -807,7 +941,7 @@ ERROR_T BTreeIndex::InteriorPointerInsert(list<SIZE_T> crumbs, const KEY_T &key,
   if (rc) { return rc; }
 
   if (b.info.numkeys >= b.info.GetNumSlotsAsInterior()) {
-    // We're at or over the slot upper bound
+    // Check if we're at or over the slot upper bound, split if we are.
     rc = Split(crumbs);
     if (rc) { return rc; }
   }
