@@ -29,12 +29,12 @@ SIZE_T NodeMetadata::GetNumSlotsAsLeaf() const
 
 SIZE_T NodeMetadata::GetLowerBoundAsInterior() const
 {
-  return (GetNumSlotsAsInterior()/2);
+  return (GetNumSlotsAsInterior()/3);
 }
 
 SIZE_T NodeMetadata::GetLowerBoundAsLeaf() const
 {
-  return (GetNumSlotsAsLeaf()/2);
+  return (GetNumSlotsAsLeaf()/3);
 }
 
 
