@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
     } else if (action == "INSERT"){
       if ((rc=btree->Insert(KEY_T(key.c_str()),VALUE_T(value.c_str())))!=ERROR_NOERROR) { 
         cout <<"FAIL"<<endl;
-	cerr <<"Can't insert due to error "<<rc<<"\n";
+	    cerr <<"Can't insert due to error "<<rc<<"\n";
       } else {
         cout <<"OK\n";
       }

@@ -492,7 +492,7 @@ ERROR_T BTreeIndex::Inserter(list<SIZE_T> crumbs, const SIZE_T &node, const KEY_
       return LeafNodeInsert(crumbs, node ,b_ref, key, value);
 
     default:
-      return ERROR_UNIMPL;
+      return ERROR_INSANE;
       break;
    }
 
@@ -632,6 +632,17 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
   SIZE_T null_ptr = 0;
   SIZE_T& null_ptr_ref = null_ptr;
 
+  unsigned int i;
+  string key_str;
+  for (i = 0; i < superblock.info.keysize; i++) {
+    key_str = "0" + key_str;
+  }
+
+  string val_str;
+  for (i = 0; i < superblock.info.valuesize; i++) {
+    val_str = "0" + val_str;
+  }
+
   switch (orig_node.info.nodetype) { 
     case BTREE_ROOT_NODE:
       // Falls through into interior node
@@ -669,8 +680,8 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
         if (rc) { return rc; }
         rc = new_node.SetKey(iter-k1,temp_key_ref);
         if (rc) { return rc; }
-        // Set key that was copied to NULL
-        rc = orig_node.SetKey(iter,null_ptr_ref);
+        // Set copied key to NULL
+        rc = orig_node.SetKey(iter,KEY_T(key_str.c_str()));
         if (rc) { return rc; }
         
 
@@ -679,8 +690,8 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
         if (rc) { return rc; }
         rc = new_node.SetVal(iter-k1,temp_val_ref);
         if (rc) { return rc; }
-        // Set value that was copied to NULL
-        rc = orig_node.SetVal(iter,null_ptr_ref);
+        // Set copied value to NULL
+        rc = orig_node.SetVal(iter,VALUE_T(val_str.c_str()));
         if (rc) { return rc; }
       }
 
@@ -688,9 +699,13 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
       // the original node, they are effectively ignored.
       orig_node.info.numkeys=k1;
 
+      // Serialize old_node
+      rc = orig_node.Serialize(buffercache,orig_block_ref);
+      if (rc) { return rc; }
 
       // Serialize new_node
-      new_node.Serialize(buffercache,new_block_ref);
+      rc = new_node.Serialize(buffercache,new_block_ref);
+      if (rc) { return rc; }
 
       // Get the first key in the new_node. This is the key we'll insert into the parent. The right pointer of the key
       // will point to new_node.
@@ -774,7 +789,7 @@ ERROR_T BTreeIndex::InteriorPointerInsert(list<SIZE_T> crumbs, const KEY_T &key,
     rc = b.SetPtr(iter+2,temp_ptr_ref);
     if (rc) { return rc; }
 
-    // Test if pointers are equal, since >= doesn't work with pointers. Break loop if they are
+    // Test if pointers are equal, since >= doesn't work with pointers. Break loop if they are.
     if (iter == offset) { break; }
   }
 
@@ -783,7 +798,7 @@ ERROR_T BTreeIndex::InteriorPointerInsert(list<SIZE_T> crumbs, const KEY_T &key,
   if (rc) { return rc; }
 
   // Set input ptr
-  rc = b.SetPtr(offset,ptr);
+  rc = b.SetPtr(offset+1,ptr);
   if (rc) { return rc; }
 
   // Serialize block
