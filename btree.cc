@@ -385,7 +385,7 @@ ERROR_T BTreeIndex::Inserter(list<SIZE_T> crumbs, const SIZE_T &node, const KEY_
         //
         // Get block offset from AllocateNode
         rc = AllocateNode(left_block_ref);
-        if (rc) { return rc; }
+        if (rc) { cout<<rc<<endl; return rc; }
 
         // Unserialize from block offset into left_node
         BTreeNode left_node;
@@ -409,7 +409,7 @@ ERROR_T BTreeIndex::Inserter(list<SIZE_T> crumbs, const SIZE_T &node, const KEY_
         //
         // Get block offset from AllocateNode
         rc = AllocateNode(right_block_ref);
-        if (rc) { return rc; }
+        if (rc) { cout<<rc<<endl; return rc; }
 
         // Unserialize from block offset into right_node
         BTreeNode right_node;
@@ -643,6 +643,7 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
     val_str = "0" + val_str;
   }
 
+
   switch (orig_node.info.nodetype) { 
     case BTREE_ROOT_NODE:
       // Falls through into interior node
@@ -661,7 +662,7 @@ ERROR_T BTreeIndex::Split(list<SIZE_T> crumbs)
         
       // Get block from AllocateNode and unserialize into new_node
       rc = AllocateNode(new_block_ref);
-      if (rc) { return rc; }
+      if (rc) { cout<<rc<<endl; return rc; }
       rc = new_node.Unserialize(buffercache, new_block_ref);
       if (rc) { return rc; }
       
