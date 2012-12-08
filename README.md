@@ -13,4 +13,4 @@ mah635, stn147, gvf706
   
   Insert as well as intialize, attach, update, and lookup are all implemented to be independant of key and value size.
   
-  Debugging tools sanitycheck and display are functional as well. 
+  Debugging tools sanitycheck and display are functional as well. Sanity check is run in sim's read/execute loop, by typing "SANE" 
