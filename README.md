@@ -3,7 +3,7 @@ Btree
 
 B-Tree project for EECS 339
 
-Micheal Hueschen, Scott Neaves, & Glenn Fellman
+Michael Hueschen, Scott Neaves, & Glenn Fellman
 mah635, stn147, gvf706
 
   Our B-Tree implements the functions intialize, attach, insert, update, lookup, sanitycheck, and display.
