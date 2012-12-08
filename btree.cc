@@ -1079,6 +1079,11 @@ ERROR_T BTreeIndex::ISA_Tree(set<SIZE_T> visited, const SIZE_T &node) const
   switch(b.info.nodetype){
   case BTREE_ROOT_NODE:
   case BTREE_INTERIOR_NODE:
+
+    if (b.info.numkeys >= b.info.GetNumSlotsAsInterior()) {
+      return ERROR_INSANE;
+    }
+
     for(offset=0; offset<=b.info.numkeys; offset++){
       rc = b.GetPtr(offset, ptr_ref);
       if(rc) {return rc;}
@@ -1088,6 +1093,9 @@ ERROR_T BTreeIndex::ISA_Tree(set<SIZE_T> visited, const SIZE_T &node) const
     return ERROR_NOERROR;
     break;
   case BTREE_LEAF_NODE:
+    if (b.info.numkeys >= b.info.GetNumSlotsAsLeaf()) {
+      return ERROR_INSANE;
+    }
     return ERROR_NOERROR;
     break;
   default:

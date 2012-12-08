@@ -119,7 +119,7 @@ int main(int argc, char *argv[])
 	}
       }
     } else if (action == "SANE") {
-        if ((rc = btree->SanityCheck()) {
+        if ((rc = btree->SanityCheck())) {
             cout << "FAIL" << endl;
             cout << "Error " << rc << endl;
         } else {
