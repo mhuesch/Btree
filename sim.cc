@@ -118,7 +118,15 @@ int main(int argc, char *argv[])
 	  cout << "OK\n";
 	}
       }
+    } else if (action == "SANE") {
+        if ((rc = btree->SanityCheck()) {
+            cout << "FAIL" << endl;
+            cout << "Error " << rc << endl;
+        } else {
+            cout << "BTree is sane" << endl;
+        }
     }
+
   }
     
   fclose(file);

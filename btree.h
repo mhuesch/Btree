@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include <list>
+#include <set>
 
 #include "global.h"
 #include "block.h"
@@ -142,7 +143,7 @@ public:
   // Is it a tree?  Is it in order?  Is it balanced?  Does each node have
   // a valid use ratio?
   ERROR_T SanityCheck() const;
-
+  ERROR_T ISA_Tree(set<SIZE_T> visited, const SIZE_T &node) const;
   // Display tree
   // BTREE_DEPTH means to do a depth first traversal of 
   // the tree, printing each node

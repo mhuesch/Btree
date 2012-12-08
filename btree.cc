@@ -1052,12 +1052,58 @@ ERROR_T BTreeIndex::Display(ostream &o, BTreeDisplayType display_type) const
 }
 
 
+  
+ERROR_T BTreeIndex::ISA_Tree(set<SIZE_T> visited, const SIZE_T &node) const
+{
+  BTreeNode b;
+  ERROR_T rc;
+  SIZE_T ptr;
+  SIZE_T& ptr_ref = ptr;
+  SIZE_T offset;
+
+  //
+  //Check here to see if node has already been visited(by scanning the visited list)
+  //
+  if (visited.count(node)) {
+    // We've been here before! Error
+    return ERROR_INSANE;
+  } else {
+    // Haven't seen this. Insert it.
+    visited.insert(node);
+  }
+  
+
+  rc = b.Unserialize(buffercache, node);
+  if(rc) {return rc;}
+
+  switch(b.info.nodetype){
+  case BTREE_ROOT_NODE:
+  case BTREE_INTERIOR_NODE:
+    for(offset=0; offset<=b.info.numkeys; offset++){
+      rc = b.GetPtr(offset, ptr_ref);
+      if(rc) {return rc;}
+      rc = ISA_Tree(visited, ptr_ref);
+      if (rc) { return rc; }
+    }
+    return ERROR_NOERROR;
+    break;
+  case BTREE_LEAF_NODE:
+    return ERROR_NOERROR;
+    break;
+  default:
+    return ERROR_INSANE;
+    break;
+  }
+  return ERROR_INSANE;
+}
+
 ERROR_T BTreeIndex::SanityCheck() const
 {
-  // WRITE ME
-  return ERROR_UNIMPL;
+  set<SIZE_T> visited;
+  SIZE_T root = superblock.info.rootnode;
+  return ISA_Tree(visited, root);
+
 }
-  
 
 
 ostream & BTreeIndex::Print(ostream &os) const
